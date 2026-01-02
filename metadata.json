@@ -1,0 +1,5 @@
+{
+  "name": "LinePlusOne - AI Order Parser",
+  "description": "A smart tool for LINE OpenChat sellers. Paste your chat history, and let Gemini AI automatically extract orders, organize +1 comments, and generate a sales list.",
+  "requestFramePermissions": []
+}
