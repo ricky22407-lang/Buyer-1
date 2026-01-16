@@ -203,7 +203,7 @@ const InputSection: React.FC<InputSectionProps> = (props) => {
                         <Save size={12} className="mr-1"/> 儲存並重新連線
                       </button>
                       <p className="text-[9px] text-indigo-400 leading-tight">
-                        * 請至 Supabase > Settings > API 取得金鑰。儲存後頁面將會重新整理。
+                        * 請至 Supabase &gt; Settings &gt; API 取得金鑰。儲存後頁面將會重新整理。
                       </p>
                    </div>
                  )}
