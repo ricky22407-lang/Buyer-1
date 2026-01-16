@@ -7,7 +7,7 @@ import ProductGenerator from './components/ProductGenerator';
 import ProductList from './components/ProductList';
 import { useOrderSystem } from './hooks/useOrderSystem';
 import { useScreenMonitor } from './hooks/useScreenMonitor';
-import { Info, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { GROUP_OPTIONS } from './constants';
 
 const App: React.FC = () => {
@@ -18,11 +18,36 @@ const App: React.FC = () => {
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [inputText, setInputText] = useState('');
   const [inputImages, setInputImages] = useState<File[]>([]);
-  const [productContext, setProductContext] = useState('');
-  const [groupName, setGroupName] = useState(GROUP_OPTIONS[0]);
-  const [sellerName, setSellerName] = useState('老闆娘'); // Global Seller Name
-  const [showSettings, setShowSettings] = useState(false);
-  const [isAiAgentMode, setIsAiAgentMode] = useState(true);
+
+  // --- Persistent Settings State ---
+  // Load from localStorage or fall back to defaults
+  const [productContext, setProductContext] = useState(() => {
+    return localStorage.getItem('linePlusOne_productContext') || '';
+  });
+  
+  const [groupName, setGroupName] = useState(() => {
+    return localStorage.getItem('linePlusOne_groupName') || GROUP_OPTIONS[0];
+  });
+  
+  const [sellerName, setSellerName] = useState(() => {
+    return localStorage.getItem('linePlusOne_sellerName') || '老闆娘';
+  });
+  
+  const [showSettings, setShowSettings] = useState(() => {
+    return localStorage.getItem('linePlusOne_showSettings') === 'true';
+  });
+  
+  const [isAiAgentMode, setIsAiAgentMode] = useState(() => {
+    const saved = localStorage.getItem('linePlusOne_isAiAgentMode');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // --- Persistence Effects ---
+  useEffect(() => { localStorage.setItem('linePlusOne_productContext', productContext); }, [productContext]);
+  useEffect(() => { localStorage.setItem('linePlusOne_groupName', groupName); }, [groupName]);
+  useEffect(() => { localStorage.setItem('linePlusOne_sellerName', sellerName); }, [sellerName]);
+  useEffect(() => { localStorage.setItem('linePlusOne_showSettings', String(showSettings)); }, [showSettings]);
+  useEffect(() => { localStorage.setItem('linePlusOne_isAiAgentMode', String(isAiAgentMode)); }, [isAiAgentMode]);
 
   // --- Business Logic Hooks ---
   const { 
@@ -37,7 +62,7 @@ const App: React.FC = () => {
     if (products.length > 0) {
       const names = products.map(p => p.name).join(', ');
       setProductContext(prev => {
-        // Only update if current context is empty or manually hasn't been heavily edited
+        // Only update if current context is empty
         if (!prev) return names;
         return prev;
       });

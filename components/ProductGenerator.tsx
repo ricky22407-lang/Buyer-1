@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { generateProductInfo } from '../services/geminiService';
-import { UploadCloud, Download, RefreshCw, DollarSign, Copy, RotateCcw, Plus, Trash, Calendar, Tag, Eraser, X, Share2, Image as ImageIcon, Layers, Sparkles } from 'lucide-react';
+import { UploadCloud, Download, RefreshCw, DollarSign, Copy, RotateCcw, Plus, Trash, Calendar, Tag, Eraser, X, Share2, Image as ImageIcon, Layers, Sparkles, Calculator } from 'lucide-react';
 import { ProductType, BulkRule } from '../types';
 // @ts-ignore
 import heic2any from 'heic2any';
@@ -26,8 +26,13 @@ const ProductGenerator: React.FC = () => {
   // Basic Data
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
+  
+  // Pricing & Rate Logic
+  const [exchangeRate, setExchangeRate] = useState(() => {
+    const saved = localStorage.getItem('linePlusOne_exchangeRate');
+    return saved ? parseFloat(saved) : 1.3;
+  });
   const [originalPrice, setOriginalPrice] = useState(0);
-  const [exchangeRate, setExchangeRate] = useState(1.1);
   const [sellingPrice, setSellingPrice] = useState(0);
 
   // New Features: Promotion & Specs
@@ -40,6 +45,25 @@ const ProductGenerator: React.FC = () => {
   // Stickers State
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stickers, setStickers] = useState<Sticker[]>([]);
+
+  // --- Effects ---
+
+  // 1. Cleanup Memory on Unmount or Image Change
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  // 2. Save Exchange Rate & Auto Calculate Price
+  useEffect(() => {
+    localStorage.setItem('linePlusOne_exchangeRate', exchangeRate.toString());
+    if (originalPrice > 0) {
+      setSellingPrice(Math.ceil(originalPrice * exchangeRate));
+    }
+  }, [exchangeRate, originalPrice]);
 
   // --- Date Helpers ---
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -98,6 +122,10 @@ const ProductGenerator: React.FC = () => {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       let file = e.target.files[0];
+      
+      // Cleanup previous image memory immediately
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+
       setImageFile(null);
       setPreviewUrl(null);
       setStickers([]);
@@ -136,13 +164,20 @@ const ProductGenerator: React.FC = () => {
             setProductName(result.productName);
             setDescription(result.description);
             setOriginalPrice(result.detectedPrice || 0);
-            setSellingPrice(Math.ceil((result.detectedPrice || 0) * exchangeRate));
           }
         } finally {
           setIsAnalyzing(false);
         }
       } catch (err) { setIsConverting(false); }
     }
+  };
+
+  const resetCanvas = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setImageFile(null);
+    setPreviewUrl(null);
+    setStickers([]);
+    setSpecs([]);
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -335,8 +370,9 @@ ${bulkTags ? bulkTags + '\n' : ''}${closingTag ? '⏰ ' + closingTag + '\n' : ''
   }, [loadedImage, stickers, sellingPrice, productType, closingTime, specs]);
 
   return (
-    <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-8 h-[calc(100dvh-120px)] overflow-hidden">
-      <div className="flex-1 lg:h-full overflow-y-auto bg-gray-50 rounded-xl p-2 lg:p-4 order-1">
+    <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-8 h-auto lg:h-[calc(100dvh-120px)] overflow-visible lg:overflow-hidden relative">
+      {/* Left Column: Image Area */}
+      <div className="flex-1 lg:h-full lg:overflow-y-auto bg-gray-50 rounded-xl p-2 lg:p-4 order-1 sticky top-14 lg:static z-20">
         <div className="bg-gray-900 rounded-xl overflow-hidden shadow-lg relative min-h-[300px] lg:min-h-[400px] flex items-center justify-center border border-gray-700">
            {!previewUrl ? (
              <div className="text-gray-400 flex flex-col items-center p-8 text-center">
@@ -357,7 +393,7 @@ ${bulkTags ? bulkTags + '\n' : ''}${closingTag ? '⏰ ' + closingTag + '\n' : ''
                 <canvas ref={canvasRef} onClick={handleCanvasClick} className="max-w-full h-auto cursor-crosshair block" />
                 <div className="absolute top-4 right-4 flex space-x-2">
                    {stickers.length > 0 && <button onClick={() => setStickers([])} className="bg-black/50 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-sm"><Eraser size={20} /></button>}
-                   <button onClick={() => { setImageFile(null); setPreviewUrl(null); setStickers([]); setSpecs([]); }} className="bg-black/50 hover:bg-white hover:text-black text-white p-2 rounded-full backdrop-blur-sm"><RotateCcw size={20} /></button>
+                   <button onClick={resetCanvas} className="bg-black/50 hover:bg-white hover:text-black text-white p-2 rounded-full backdrop-blur-sm"><RotateCcw size={20} /></button>
                 </div>
              </>
            )}
@@ -365,7 +401,8 @@ ${bulkTags ? bulkTags + '\n' : ''}${closingTag ? '⏰ ' + closingTag + '\n' : ''
         </div>
       </div>
 
-      <div className="flex-1 lg:h-full overflow-y-auto order-2 mt-4 lg:mt-0 pb-20 lg:pb-0">
+      {/* Right Column: Form Area */}
+      <div className="flex-1 lg:h-full lg:overflow-y-auto order-2 mt-4 lg:mt-0 pb-32 lg:pb-0">
         <div className="bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
            <h2 className="text-lg lg:text-xl font-bold text-gray-800 flex items-center border-b pb-4">
              <Tag className="mr-2 text-[#06C755]" />
@@ -383,20 +420,54 @@ ${bulkTags ? bulkTags + '\n' : ''}${closingTag ? '⏰ ' + closingTag + '\n' : ''
               </div>
            </div>
 
-           <div className="grid grid-cols-2 gap-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
-               <div className="col-span-2 flex space-x-2">
+           {/* Pricing Calculator Section */}
+           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+               <div className="flex space-x-2 mb-4">
                  {(['連線', '預購', '現貨'] as ProductType[]).map(type => (
-                   <button key={type} onClick={() => setProductType(type)} className={`flex-1 py-2.5 text-sm font-bold rounded-lg border ${productType === type ? 'bg-white border-[#06C755] text-[#06C755]' : 'bg-transparent border-gray-300 text-gray-400'}`}>{type}</button>
+                   <button key={type} onClick={() => setProductType(type)} className={`flex-1 py-2 text-sm font-bold rounded-lg border ${productType === type ? 'bg-white border-[#06C755] text-[#06C755]' : 'bg-transparent border-gray-300 text-gray-400'}`}>{type}</button>
                  ))}
                </div>
-               <div>
-                  <label className="block text-xs text-gray-500 mb-1">成本偵測</label>
-                  <input type="number" value={originalPrice} onChange={e => setOriginalPrice(Number(e.target.value))} className="w-full p-2 bg-white border rounded-md" />
+
+               <div className="grid grid-cols-6 gap-3 items-end">
+                   {/* Cost */}
+                   <div className="col-span-2">
+                      <label className="block text-[10px] text-gray-500 mb-1">成本偵測</label>
+                      <input 
+                        type="number" 
+                        value={originalPrice} 
+                        onChange={e => setOriginalPrice(Number(e.target.value))} 
+                        className="w-full p-2 bg-white border rounded-md text-sm" 
+                      />
+                   </div>
+
+                   {/* Exchange Rate (Middle) */}
+                   <div className="col-span-2">
+                      <label className="block text-[10px] text-gray-500 mb-1 flex items-center text-[#06C755]">
+                        <Calculator size={10} className="mr-1" />預設匯率
+                      </label>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        value={exchangeRate} 
+                        onChange={e => setExchangeRate(Number(e.target.value))} 
+                        className="w-full p-2 bg-white border border-[#06C755] rounded-md text-sm text-center font-bold text-[#06C755]" 
+                      />
+                   </div>
+
+                   {/* Selling Price */}
+                   <div className="col-span-2">
+                       <label className="block text-[10px] font-bold text-red-600 mb-1">對外售價</label>
+                       <input 
+                        type="number" 
+                        value={sellingPrice} 
+                        onChange={e => setSellingPrice(Number(e.target.value))} 
+                        className="w-full p-2 border-red-200 border-2 rounded-md font-bold text-red-600 text-lg bg-white" 
+                       />
+                   </div>
                </div>
-               <div>
-                   <label className="block text-xs font-bold text-red-600 mb-1">對外售價</label>
-                   <input type="number" value={sellingPrice} onChange={e => setSellingPrice(Number(e.target.value))} className="w-full p-2 border-red-200 border-2 rounded-md font-bold text-red-600 text-lg" />
-               </div>
+               <p className="text-[10px] text-gray-400 mt-2 text-center">
+                 * 修改「成本」或「匯率」時會自動計算售價 (成本 x 匯率)
+               </p>
            </div>
            
            <div className="border-t pt-4">
@@ -425,9 +496,10 @@ ${bulkTags ? bulkTags + '\n' : ''}${closingTag ? '⏰ ' + closingTag + '\n' : ''
               </div>
            </div>
 
-           <div className="pt-4 border-t flex space-x-2 fixed bottom-0 left-0 right-0 bg-white p-4 lg:relative lg:bg-transparent lg:p-0 z-10">
+           {/* Actions Bar - Mobile Optimized */}
+           <div className="fixed bottom-[64px] left-0 right-0 p-3 bg-white border-t shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex space-x-2 z-40 lg:static lg:bg-transparent lg:p-0 lg:border-none lg:shadow-none lg:z-auto">
              <button onClick={copyText} className="flex-1 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-bold flex items-center justify-center shadow-sm text-sm"><Copy size={18} className="mr-2" /> 複製文案</button>
-             <button onClick={handleShareOrCopy} disabled={stickers.length === 0} className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center text-white shadow-md text-sm ${stickers.length === 0 ? 'bg-gray-300' : 'bg-[#06C755] hover:bg-[#05b34c]'}`}><Share2 size={18} className="mr-2" /> 分享/複製圖片</button>
+             <button onClick={handleShareOrCopy} disabled={stickers.length === 0} className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center text-white shadow-md text-sm ${stickers.length === 0 ? 'bg-gray-300' : 'bg-[#06C755] hover:bg-[#05b34c]'}`}><Share2 size={18} className="mr-2" /> 分享圖片</button>
              <button onClick={downloadImage} disabled={stickers.length === 0} className="px-3 py-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200"><Download size={20} /></button>
            </div>
         </div>

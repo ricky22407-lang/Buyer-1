@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { FileText, Image as ImageIcon, Monitor, UploadCloud, X, Play, Square, Eraser, Wand2, AlertTriangle, Settings, Bot, ToggleLeft, ToggleRight, Users, UserCheck } from 'lucide-react';
 import { SAMPLE_CHAT_TEXT, GROUP_OPTIONS } from '../constants';
 
@@ -41,6 +41,34 @@ interface InputSectionProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
+// Sub-component for efficient memory management of thumbnails
+const ImageThumbnail: React.FC<{ file: File; onRemove: () => void }> = ({ file, onRemove }) => {
+  const [src, setSrc] = useState<string>('');
+
+  useEffect(() => {
+    // Create URL only once when file changes
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+
+    // Cleanup when component unmounts or file changes
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+
+  return (
+    <div className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+      {src && <img src={src} alt="preview" className="w-full h-full object-cover" />}
+      <button 
+        onClick={onRemove}
+        className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+      >
+        <X size={12} />
+      </button>
+    </div>
+  );
+};
+
 const InputSection: React.FC<InputSectionProps> = (props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,6 +76,8 @@ const InputSection: React.FC<InputSectionProps> = (props) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
       props.setInputImages(prev => [...prev, ...newFiles]);
+      // Reset value to allow re-uploading the same file if needed (after clearing)
+      e.target.value = '';
     }
   };
 
@@ -236,19 +266,11 @@ const InputSection: React.FC<InputSectionProps> = (props) => {
                 {props.inputImages.length > 0 && (
                   <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1">
                     {props.inputImages.map((file, idx) => (
-                      <div key={idx} className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                        <img 
-                          src={URL.createObjectURL(file)} 
-                          alt="preview" 
-                          className="w-full h-full object-cover" 
-                        />
-                        <button 
-                          onClick={() => removeImage(idx)}
-                          className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
+                      <ImageThumbnail 
+                        key={`${file.name}-${idx}`} 
+                        file={file} 
+                        onRemove={() => removeImage(idx)} 
+                      />
                     ))}
                   </div>
                 )}
