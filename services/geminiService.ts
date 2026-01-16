@@ -26,44 +26,47 @@ const fileToBase64 = async (file: File): Promise<string> => {
 // 1. Unified Parser: Extracts Orders, Products, and AI Questions
 export const parseChatLogs = async (
   input: string | File[], 
-  productContext: string = ""
+  productContext: string = "",
+  sellerNameInput: string = "老闆娘"
 ): Promise<AnalysisResult> => {
   const ai = getClient();
   let contents: any = [];
 
-  // Optimized System Instruction for Gemini Flash
+  const sellerList = sellerNameInput.split(/[,，\s]+/).filter(n => n.trim());
+  const sellerNamesDisplay = sellerList.join('、');
+
   const systemInstruction = `
-    You are an AI assistant for a LINE OpenChat Group Buying (Daigou) community in Taiwan.
+    You are an AI assistant for a LINE OpenChat Group Buying community in Taiwan.
     Language: Traditional Chinese (Taiwan).
     Currency: TWD (NT$).
 
-    Your task is to analyze chat logs and extract:
-    1. **Orders**: Customer purchases (look for +1, wants, quantities).
-    2. **Products**: New product listings by the seller.
-    3. **AI Questions**: Questions tagged with #AI.
+    ### IDENTITY RULES
+    - **AUTHORIZED SELLERS**: 
+      1. Names: [${sellerNamesDisplay || 'None specified'}].
+      2. **"本人" (Self)**: Green speech bubbles / Right-aligned messages.
+    - ONLY Sellers can use "上架" or "#代喊" triggers.
 
-    ### 1. PRODUCT EXTRACTION RULES
-    Identify seller posts with hashtags:
-    - **#連線價**: Type = '連線'
-    - **#預購價**: Type = '預購'
-    - **#現貨**: Type = '現貨'
-    - **#結單 MM/DD**: Closing time.
-    - **Specs**: "A. Red", "Sizes: S/M". Extract to 'specs' array.
-    - **Bulk Rules**: "#買N個N元" (total price) or "#買N個單價N元" (unit price).
+    ### PRODUCT CREATION TRIGGER (STRICT)
+    - **MUST** find the keyword "上架" (e.g., #上架, 上架商品) in a Seller's message to create a new product. 
+    - **PRICE DETECTION**: Semantic analysis (e.g., "150元", "$150").
 
-    ### 2. ORDER EXTRACTION RULES
-    - **Keywords**: "#加單", "+1", "want", "x1", "我要".
-    - **#改單**: Mark isModification = true.
-    - **Specs**: If user says "Red+1" or "A+1", map "Red"/"A" to 'selectedSpec'.
-    - **Pricing**: Auto-calculate 'detectedPrice' based on Bulk Rules if quantity matches.
-    
-    ### 3. AI AGENT RULES
-    - Only answer if text contains "#AI".
-    - Use the provided "Active Products" context.
-    - Be polite, helpful, and concise.
-    - **Safety**: Do NOT reveal cost prices.
+    ### PROXY ORDERING TRIGGER (NEW: #代喊)
+    - **TRIGGER**: Find the keyword "#代喊" in a Seller's message.
+    - **LOGIC**: This indicates the seller is ordering for someone else.
+    - **BUYER IDENTIFICATION**: Look for a name following "@" or phrases like "幫[姓名]". 
+    - **RESULT**: Set the extracted customer's name as "buyerName".
+    - Example: "老闆娘: #代喊 @陳小美 戒指+1" -> buyerName: "陳小美", itemName: "戒指", quantity: 1.
 
-    ### EXISTING ACTIVE PRODUCTS (Context)
+    ### REGULAR ORDER MATCHING
+    - Match user "+1" or "A+1" to "EXISTING ACTIVE PRODUCTS" listed below.
+
+    ### CONSOLIDATION RULE
+    - Merge multiple images/text of the same item into ONE product object if they appear together.
+
+    ### AI AGENT
+    - Answer questions only if "#AI" is present.
+
+    ### EXISTING ACTIVE PRODUCTS
     """
     ${productContext || "No previous products."}
     """
@@ -83,7 +86,7 @@ export const parseChatLogs = async (
       model: GEMINI_MODEL,
       contents: contents,
       config: {
-        systemInstruction: systemInstruction, // Moved prompt here for Flash optimization
+        systemInstruction: systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -99,7 +102,7 @@ export const parseChatLogs = async (
                   detectedPrice: { type: Type.INTEGER },
                   rawText: { type: Type.STRING },
                   isModification: { type: Type.BOOLEAN },
-                  selectedSpec: { type: Type.STRING, description: "The specific variant chosen (e.g. Red, XL, A)" },
+                  selectedSpec: { type: Type.STRING },
                 },
                 required: ["buyerName", "itemName", "quantity", "rawText"],
               },
@@ -112,20 +115,9 @@ export const parseChatLogs = async (
                   name: { type: Type.STRING },
                   price: { type: Type.NUMBER },
                   type: { type: Type.STRING, enum: ['連線', '預購', '現貨'] },
-                  specs: { type: Type.ARRAY, items: { type: Type.STRING }, description: "List of product variants" },
+                  specs: { type: Type.ARRAY, items: { type: Type.STRING } },
                   closingTime: { type: Type.STRING },
                   description: { type: Type.STRING },
-                  bulkRules: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                         qty: { type: Type.NUMBER },
-                         price: { type: Type.NUMBER },
-                         isUnitPrice: { type: Type.BOOLEAN }
-                      }
-                    }
-                  }
                 },
                 required: ["name", "price", "type"],
               },
@@ -149,7 +141,12 @@ export const parseChatLogs = async (
 
     if (response.text) {
       // @ts-ignore
-      return JSON.parse(response.text) as AnalysisResult;
+      const parsed = JSON.parse(response.text);
+      return {
+        orders: parsed.orders || [],
+        products: parsed.products || [],
+        aiInteractions: parsed.aiInteractions || []
+      } as AnalysisResult;
     }
     return { orders: [], products: [], aiInteractions: [] };
   } catch (error) {
@@ -158,20 +155,15 @@ export const parseChatLogs = async (
   }
 };
 
-// 2. AI Agent Service (Placeholder if needed for separate chat)
-export const generateAiReply = async (input: string, productContext: string): Promise<AiInteraction[]> => {
-  return []; 
-};
-
 // 3. Product Card Generator
 export const generateProductInfo = async (file: File) => {
   const ai = getClient();
   const base64Data = await fileToBase64(file);
 
   const prompt = `
-    Analyze this product image taken in a store.
+    Analyze this product image.
     1. **Identify Product Name**: Use Traditional Chinese.
-    2. **Write Description**: Sales tone, exciting.
+    2. **Write Description**: Sales tone.
     3. **Detect Price**: Number only.
   `;
 

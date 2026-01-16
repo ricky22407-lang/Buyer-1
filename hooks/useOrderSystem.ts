@@ -16,7 +16,10 @@ export const useOrderSystem = () => {
     source: 'manual' | 'image' | 'monitor',
     groupName: string
   ) => {
-    const { orders: rawOrders, products: newProducts, aiInteractions: newInteractions } = result;
+    // Defensive check
+    const rawOrders = result.orders || [];
+    const newProducts = result.products || [];
+    const newInteractions = result.aiInteractions || [];
 
     // 1. Process Orders with Deduplication Logic
     if (rawOrders.length > 0) {
@@ -37,9 +40,7 @@ export const useOrderSystem = () => {
                 const isDuplicate = prevOrders.some(existing => {
                    const isSameUser = existing.buyerName === newOrder.buyerName;
                    const isSameItem = existing.itemName === newOrder.itemName;
-                   // Check Group Name too
                    const isSameGroup = existing.groupName === newOrder.groupName;
-                   // Avoid dupes within 10 minutes
                    const isRecent = (Date.now() - existing.timestamp) < 1000 * 60 * 10;
                    return isSameUser && isSameItem && isSameGroup && isRecent;
                 });
@@ -52,27 +53,53 @@ export const useOrderSystem = () => {
       }
     }
 
-    // 2. Process Products with Deduplication
+    // 2. Process Products with Semantic Deduplication
     if (newProducts.length > 0) {
       const processedProducts: Product[] = newProducts.map(p => ({
         ...p,
         id: uuidv4(),
         timestamp: Date.now(),
         purchasedQty: 0,
-        purchaseNotes: ''
+        purchaseNotes: '',
+        specs: p.specs || [],
+        bulkRules: p.bulkRules || []
       }));
 
       setProducts(prev => {
-         const uniqueNew = processedProducts.filter(np => 
-             // Avoid adding the same product if detected within last 5 minutes
-             !prev.some(ep => ep.name === np.name && (Date.now() - ep.timestamp < 1000 * 60 * 5))
-         );
-         return [...prev, ...uniqueNew];
+        let currentProducts = [...prev];
+        
+        processedProducts.forEach(newP => {
+          // Find if product already exists (exact match or high similarity)
+          const existingIdx = currentProducts.findIndex(ep => {
+            const n1 = ep.name.trim().toLowerCase();
+            const n2 = newP.name.trim().toLowerCase();
+            // Match if exactly the same OR one contains the other (and they are not too short)
+            const isSemanticMatch = n1 === n2 || (n1.length > 3 && n2.length > 3 && (n1.includes(n2) || n2.includes(n1)));
+            const isRecent = (Date.now() - ep.timestamp) < 1000 * 60 * 60; // Within 1 hour
+            return isSemanticMatch && isRecent;
+          });
+
+          if (existingIdx > -1) {
+            // Update existing instead of adding
+            currentProducts[existingIdx] = {
+              ...currentProducts[existingIdx],
+              // Keep old ID and stats, but update metadata if new one has more info
+              price: newP.price || currentProducts[existingIdx].price,
+              type: newP.type || currentProducts[existingIdx].type,
+              specs: newP.specs.length > currentProducts[existingIdx].specs!.length ? newP.specs : currentProducts[existingIdx].specs,
+              description: newP.description || currentProducts[existingIdx].description
+            };
+          } else {
+            currentProducts.push(newP);
+          }
+        });
+
+        return currentProducts;
       });
     }
 
     // 3. Process AI Interactions
-    if (newInteractions && newInteractions.length > 0) {
+    if (newInteractions.length > 0) {
       const timestamped = newInteractions.map(i => ({...i, id: uuidv4(), timestamp: Date.now()}));
       setAiInteractions(prev => [...timestamped, ...prev]);
     }
@@ -83,12 +110,13 @@ export const useOrderSystem = () => {
     input: string | File[], 
     productContext: string, 
     source: 'manual' | 'image',
-    groupName: string
+    groupName: string,
+    sellerName: string
   ) => {
     setIsProcessing(true);
     setError(null);
     try {
-      const result = await parseChatLogs(input, productContext);
+      const result = await parseChatLogs(input, productContext, sellerName);
       processAnalysisResult(result, source, groupName);
     } catch (err) {
       console.error(err);
@@ -108,7 +136,9 @@ export const useOrderSystem = () => {
       id: uuidv4(),
       timestamp: Date.now(),
       purchasedQty: 0,
-      purchaseNotes: ''
+      purchaseNotes: '',
+      specs: productData.specs || [],
+      bulkRules: productData.bulkRules || []
     };
     setProducts(prev => [newProduct, ...prev]);
   }, []);

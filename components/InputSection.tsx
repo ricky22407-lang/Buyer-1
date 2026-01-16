@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { FileText, Image as ImageIcon, Monitor, UploadCloud, X, Play, Square, Eraser, Wand2, AlertTriangle, Settings, Bot, ToggleLeft, ToggleRight, Users } from 'lucide-react';
+import { FileText, Image as ImageIcon, Monitor, UploadCloud, X, Play, Square, Eraser, Wand2, AlertTriangle, Settings, Bot, ToggleLeft, ToggleRight, Users, UserCheck } from 'lucide-react';
 import { SAMPLE_CHAT_TEXT, GROUP_OPTIONS } from '../constants';
 
 export type InputMode = 'text' | 'image' | 'monitor';
@@ -18,6 +18,8 @@ interface InputSectionProps {
   setProductContext: (text: string) => void;
   groupName: string;
   setGroupName: (name: string) => void;
+  sellerName: string;
+  setSellerName: (name: string) => void;
   isAiAgentMode: boolean;
   setIsAiAgentMode: (enabled: boolean) => void;
   showSettings: boolean;
@@ -77,37 +79,55 @@ const InputSection: React.FC<InputSectionProps> = (props) => {
             onClick={() => props.setShowSettings(!props.showSettings)}
             className="w-full flex justify-between items-center text-gray-700 font-medium hover:text-[#06C755]"
           >
-            <span className="flex items-center"><Settings size={18} className="mr-2"/> 連線商品與設定</span>
+            <span className="flex items-center"><Settings size={18} className="mr-2"/> 連線設定與權限</span>
             <span className="text-xs text-gray-400">{props.showSettings ? '收起' : '展開'}</span>
           </button>
           
           {props.showSettings && (
             <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
               
-              {/* Group Name Setting */}
-              <div>
-                <label className="block text-xs text-gray-500 mb-1 flex items-center">
-                   <Users size={12} className="mr-1" />
-                   群組名稱標籤 (方便區分訂單來源)
-                </label>
-                <select
-                  value={props.groupName}
-                  onChange={(e) => props.setGroupName(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#06C755] focus:border-transparent bg-white"
-                >
-                  {GROUP_OPTIONS.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Group Name Setting */}
+                <div>
+                  <label className="block text-[10px] text-gray-500 mb-1 flex items-center">
+                    <Users size={10} className="mr-1" />
+                    目標群組
+                  </label>
+                  <select
+                    value={props.groupName}
+                    onChange={(e) => props.setGroupName(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#06C755] focus:border-transparent bg-white"
+                  >
+                    {GROUP_OPTIONS.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Seller Name Setting */}
+                <div>
+                  <label className="block text-[10px] text-gray-500 mb-1 flex items-center">
+                    <UserCheck size={10} className="mr-1" />
+                    賣家帳號名稱
+                  </label>
+                  <input
+                    type="text"
+                    value={props.sellerName}
+                    onChange={(e) => props.setSellerName(e.target.value)}
+                    placeholder="如：老闆娘, 小編A"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#06C755] focus:border-transparent bg-white"
+                  />
+                  <p className="text-[9px] text-gray-400 mt-1">* 多人請用逗號隔開 (自動支援本人)</p>
+                </div>
               </div>
 
               <div>
-                <p className="text-xs text-gray-500 mb-2">手動補充商品清單 (AI 備用)：</p>
+                <p className="text-[10px] text-gray-500 mb-1">已上架商品名稱 (用於精準配對)：</p>
                 <textarea
                   value={props.productContext}
                   onChange={(e) => props.setProductContext(e.target.value)}
-                  placeholder="除了自動偵測外，您也可以在此手動輸入..."
-                  className="w-full h-32 p-2 border border-gray-300 rounded-lg text-sm"
+                  placeholder="輸入目前有的商品，AI 會自動將客人的簡稱（如：尺+1）配對到正確商品..."
+                  className="w-full h-24 p-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
               <div className="flex items-center justify-between pt-2 border-t">
@@ -172,7 +192,7 @@ const InputSection: React.FC<InputSectionProps> = (props) => {
             {/* Show Current Group Tag hint */}
             <div className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600 flex items-center">
                <Users size={12} className="mr-1" />
-               標籤：{props.groupName}
+               {props.groupName}
             </div>
           </div>
           

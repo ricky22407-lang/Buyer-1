@@ -195,7 +195,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
               {/* Footer / ID */}
               <div className="bg-gray-50 px-4 py-2 border-t border-gray-100 flex justify-between items-center">
                 <span className="text-[10px] text-gray-300">ID: {product.id.slice(0, 4)}</span>
-                {product.bulkRules.length > 0 && (
+                {product.bulkRules && product.bulkRules.length > 0 && (
                     <span className="text-[10px] text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full flex items-center">
                       <Tag size={10} className="mr-1" /> 多件優惠
                     </span>
