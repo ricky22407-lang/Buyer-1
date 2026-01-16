@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { FileText, Image as ImageIcon, Monitor, UploadCloud, X, Play, Square, Eraser, Wand2, AlertTriangle, Settings, Bot, ToggleLeft, ToggleRight, Users, UserCheck } from 'lucide-react';
+import { FileText, Image as ImageIcon, Monitor, UploadCloud, X, Play, Square, Eraser, Wand2, AlertTriangle, Settings, Bot, ToggleLeft, ToggleRight, Users, UserCheck, Download, Upload, Database, Save } from 'lucide-react';
 import { SAMPLE_CHAT_TEXT, GROUP_OPTIONS } from '../constants';
 
 export type InputMode = 'text' | 'image' | 'monitor';
@@ -25,6 +25,13 @@ interface InputSectionProps {
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
 
+  // Supabase Credentials
+  supabaseUrl: string;
+  setSupabaseUrl: (url: string) => void;
+  supabaseKey: string;
+  setSupabaseKey: (key: string) => void;
+  onSaveSupabase: () => void;
+
   // Processing State
   isProcessing: boolean;
   error: string | null;
@@ -39,6 +46,10 @@ interface InputSectionProps {
   monitorError: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
+
+  // Data Management
+  onExportData: () => void;
+  onImportData: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 // Sub-component for efficient memory management of thumbnails
@@ -71,6 +82,8 @@ const ImageThumbnail: React.FC<{ file: File; onRemove: () => void }> = ({ file, 
 
 const InputSection: React.FC<InputSectionProps> = (props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [showSupabaseInputs, setShowSupabaseInputs] = useState(false);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -151,6 +164,51 @@ const InputSection: React.FC<InputSectionProps> = (props) => {
                 </div>
               </div>
 
+              {/* Supabase Config Toggle */}
+              <div className="border border-indigo-100 bg-indigo-50/50 rounded-lg p-2 mt-2">
+                 <button 
+                   onClick={() => setShowSupabaseInputs(!showSupabaseInputs)}
+                   className="flex items-center w-full text-xs font-bold text-indigo-700 justify-between"
+                 >
+                   <span className="flex items-center"><Database size={12} className="mr-1"/> 雲端同步設定 (Supabase)</span>
+                   <span>{showSupabaseInputs ? '▲' : '▼'}</span>
+                 </button>
+                 
+                 {showSupabaseInputs && (
+                   <div className="mt-2 space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                      <div>
+                        <label className="block text-[10px] text-indigo-500 font-bold mb-1">Project URL</label>
+                        <input 
+                          type="text" 
+                          value={props.supabaseUrl}
+                          onChange={(e) => props.setSupabaseUrl(e.target.value)}
+                          placeholder="https://xxx.supabase.co"
+                          className="w-full p-1.5 border border-indigo-200 rounded text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-indigo-500 font-bold mb-1">API Key (anon public)</label>
+                        <input 
+                          type="password" 
+                          value={props.supabaseKey}
+                          onChange={(e) => props.setSupabaseKey(e.target.value)}
+                          placeholder="eyJhbGciOiJIUzI1NiIsIn..."
+                          className="w-full p-1.5 border border-indigo-200 rounded text-xs"
+                        />
+                      </div>
+                      <button 
+                        onClick={props.onSaveSupabase}
+                        className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center justify-center mt-1"
+                      >
+                        <Save size={12} className="mr-1"/> 儲存並重新連線
+                      </button>
+                      <p className="text-[9px] text-indigo-400 leading-tight">
+                        * 請至 Supabase > Settings > API 取得金鑰。儲存後頁面將會重新整理。
+                      </p>
+                   </div>
+                 )}
+              </div>
+
               <div>
                 <p className="text-[10px] text-gray-500 mb-1">已上架商品名稱 (用於精準配對)：</p>
                 <textarea
@@ -160,6 +218,30 @@ const InputSection: React.FC<InputSectionProps> = (props) => {
                   className="w-full h-24 p-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
+
+              {/* Data Sync Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                  <button 
+                    onClick={props.onExportData}
+                    className="flex items-center justify-center py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    <Download size={14} className="mr-1.5" /> 備份/移轉資料 (匯出)
+                  </button>
+                  <button 
+                    onClick={() => importInputRef.current?.click()}
+                    className="flex items-center justify-center py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    <Upload size={14} className="mr-1.5" /> 載入資料 (匯入)
+                  </button>
+                  <input 
+                    ref={importInputRef}
+                    type="file" 
+                    accept=".json"
+                    onChange={props.onImportData}
+                    className="hidden"
+                  />
+              </div>
+
               <div className="flex items-center justify-between pt-2 border-t">
                 <span className="text-sm font-medium text-gray-700 flex items-center">
                   <Bot size={16} className="mr-2" /> 

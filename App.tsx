@@ -7,8 +7,9 @@ import ProductGenerator from './components/ProductGenerator';
 import ProductList from './components/ProductList';
 import { useOrderSystem } from './hooks/useOrderSystem';
 import { useScreenMonitor } from './hooks/useScreenMonitor';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Cloud, CloudOff } from 'lucide-react';
 import { GROUP_OPTIONS } from './constants';
+import { Order, Product, AiInteraction } from './types';
 
 const App: React.FC = () => {
   // --- Navigation State ---
@@ -19,28 +20,19 @@ const App: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [inputImages, setInputImages] = useState<File[]>([]);
 
-  // --- Persistent Settings State ---
-  // Load from localStorage or fall back to defaults
-  const [productContext, setProductContext] = useState(() => {
-    return localStorage.getItem('linePlusOne_productContext') || '';
-  });
-  
-  const [groupName, setGroupName] = useState(() => {
-    return localStorage.getItem('linePlusOne_groupName') || GROUP_OPTIONS[0];
-  });
-  
-  const [sellerName, setSellerName] = useState(() => {
-    return localStorage.getItem('linePlusOne_sellerName') || '老闆娘';
-  });
-  
-  const [showSettings, setShowSettings] = useState(() => {
-    return localStorage.getItem('linePlusOne_showSettings') === 'true';
-  });
-  
+  // --- Persistent Settings State (Local Only) ---
+  const [productContext, setProductContext] = useState(() => localStorage.getItem('linePlusOne_productContext') || '');
+  const [groupName, setGroupName] = useState(() => localStorage.getItem('linePlusOne_groupName') || GROUP_OPTIONS[0]);
+  const [sellerName, setSellerName] = useState(() => localStorage.getItem('linePlusOne_sellerName') || '老闆娘');
+  const [showSettings, setShowSettings] = useState(() => localStorage.getItem('linePlusOne_showSettings') === 'true');
   const [isAiAgentMode, setIsAiAgentMode] = useState(() => {
     const saved = localStorage.getItem('linePlusOne_isAiAgentMode');
     return saved !== null ? saved === 'true' : true;
   });
+
+  // --- Supabase Credentials ---
+  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('linePlusOne_supabaseUrl') || '');
+  const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('linePlusOne_supabaseKey') || '');
 
   // --- Persistence Effects ---
   useEffect(() => { localStorage.setItem('linePlusOne_productContext', productContext); }, [productContext]);
@@ -48,13 +40,21 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('linePlusOne_sellerName', sellerName); }, [sellerName]);
   useEffect(() => { localStorage.setItem('linePlusOne_showSettings', String(showSettings)); }, [showSettings]);
   useEffect(() => { localStorage.setItem('linePlusOne_isAiAgentMode', String(isAiAgentMode)); }, [isAiAgentMode]);
+  
+  // Save credentials AND reload if they change (to re-init Supabase client)
+  const handleSupabaseSave = () => {
+    localStorage.setItem('linePlusOne_supabaseUrl', supabaseUrl);
+    localStorage.setItem('linePlusOne_supabaseKey', supabaseKey);
+    window.location.reload(); // Reload to initialize service with new keys
+  };
 
   // --- Business Logic Hooks ---
   const { 
     orders, setOrders, 
-    products, updateProduct, addProduct,
+    products, updateProduct, addProduct, setProducts,
     aiInteractions, setAiInteractions, clearAiInteractions,
-    isProcessing, error, analyzeContent, processAnalysisResult 
+    isProcessing, error, analyzeContent, processAnalysisResult,
+    isCloudConnected
   } = useOrderSystem();
 
   // Keep productContext updated with current product names for better fuzzy matching
@@ -62,7 +62,6 @@ const App: React.FC = () => {
     if (products.length > 0) {
       const names = products.map(p => p.name).join(', ');
       setProductContext(prev => {
-        // Only update if current context is empty
         if (!prev) return names;
         return prev;
       });
@@ -93,6 +92,46 @@ const App: React.FC = () => {
     clearAiInteractions();
   };
 
+  // --- Data Sync Logic ---
+  const handleExportData = () => {
+    const data = {
+      orders,
+      products,
+      aiInteractions,
+      settings: { productContext, groupName, sellerName, isAiAgentMode },
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `LinePlusOne_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (window.confirm('確定要手動匯入舊資料嗎？')) {
+           if (json.orders) setOrders(json.orders);
+           if (json.products) setProducts(json.products);
+           if (json.aiInteractions) setAiInteractions(json.aiInteractions);
+           alert('資料匯入成功！');
+        }
+      } catch (err) { alert('檔案格式錯誤'); }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; 
+  };
+
   // --- Render ---
   return (
     <div className="min-h-[100dvh] bg-gray-50 flex flex-col">
@@ -111,16 +150,26 @@ const App: React.FC = () => {
            />
         ) : (
           <>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3 lg:p-4 mb-4 lg:mb-6 flex items-start gap-3 mx-1 lg:mx-0 shadow-sm">
-              <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-sm flex-shrink-0 mt-0.5">
-                <Sparkles size={18} />
+            <div className={`border rounded-xl p-3 lg:p-4 mb-4 lg:mb-6 flex items-start gap-3 mx-1 lg:mx-0 shadow-sm ${isCloudConnected ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200' : 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200'}`}>
+              <div className={`p-1.5 rounded-lg text-white shadow-sm flex-shrink-0 mt-0.5 ${isCloudConnected ? 'bg-green-600' : 'bg-orange-500'}`}>
+                {isCloudConnected ? <Cloud size={18} /> : <CloudOff size={18} />}
               </div>
-              <div className="text-sm text-blue-900">
-                <p className="font-bold mb-1 text-blue-800">精準抓單更新：身分比對與自動指令</p>
-                <ul className="list-disc pl-4 space-y-1 text-xs lg:text-sm text-blue-700">
-                  <li><strong>「上架」自動開單</strong>：賣家訊息中包含「上架」字眼，AI 會自動偵測品名、售價並建立商品。</li>
-                  <li><strong>「#代喊」小編功能</strong>：若小編喊出「#代喊 @客戶名 戒指+1」，系統會自動將訂單歸屬給該客戶。</li>
-                  <li><strong>身分鎖定</strong>：僅「連線設定」中標記的小編/賣家能觸發上架與代喊功能，確保安全。</li>
+              <div className={`text-sm ${isCloudConnected ? 'text-green-900' : 'text-orange-900'}`}>
+                <p className={`font-bold mb-1 ${isCloudConnected ? 'text-green-800' : 'text-orange-800'}`}>
+                  {isCloudConnected ? '雲端即時連線中 (Supabase Realtime)' : '目前為單機離線模式'}
+                </p>
+                <ul className="list-disc pl-4 space-y-1 text-xs lg:text-sm">
+                  {isCloudConnected ? (
+                    <>
+                      <li><strong>自動同步</strong>：日本上架商品，台灣電腦會即時跳出，無需手動匯入。</li>
+                      <li><strong>資料安全</strong>：資料已加密儲存於 Supabase，關閉網頁不會遺失。</li>
+                    </>
+                  ) : (
+                    <>
+                      <li><strong>注意</strong>：尚未設定雲端資料庫，資料僅存於此裝置。</li>
+                      <li><strong>設定方式</strong>：請展開下方設定，輸入 Supabase URL 與 Key 即可啟用雲端同步。</li>
+                    </>
+                  )}
                 </ul>
               </div>
             </div>
@@ -155,6 +204,13 @@ const App: React.FC = () => {
                   monitorError={monitorError}
                   videoRef={videoRef}
                   canvasRef={canvasRef}
+                  onExportData={handleExportData}
+                  onImportData={handleImportData}
+                  supabaseUrl={supabaseUrl}
+                  setSupabaseUrl={setSupabaseUrl}
+                  supabaseKey={supabaseKey}
+                  setSupabaseKey={setSupabaseKey}
+                  onSaveSupabase={handleSupabaseSave}
                 />
               </div>
 
