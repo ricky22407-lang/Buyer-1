@@ -20,6 +20,7 @@ interface ProductGeneratorProps {
     name: string;
     price: number;
     description: string;
+    imageUrl?: string;
   } | null;
 }
 
@@ -30,6 +31,7 @@ const ProductGenerator: React.FC<ProductGeneratorProps> = ({ initialData }) => {
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   
   // Basic Data
   const [productName, setProductName] = useState('');
@@ -64,6 +66,28 @@ const ProductGenerator: React.FC<ProductGeneratorProps> = ({ initialData }) => {
       setSellingPrice(initialData.price);
       // Assume initial price is already the selling price estimate
       setOriginalPrice(Math.round(initialData.price / exchangeRate));
+
+      // Attempt to load image from URL
+      if (initialData.imageUrl) {
+        setIsDownloadingImage(true);
+        fetch(initialData.imageUrl)
+          .then(res => res.blob())
+          .then(blob => {
+            const file = new File([blob], "trend_image.jpg", { type: blob.type });
+            setImageFile(file);
+            const objectUrl = URL.createObjectURL(file);
+            setPreviewUrl(objectUrl);
+            const img = new Image();
+            img.src = objectUrl;
+            img.onload = () => { setLoadedImage(img); setIsDownloadingImage(false); };
+            img.onerror = () => { setIsDownloadingImage(false); console.error("Failed to load image to canvas"); };
+          })
+          .catch(err => {
+            console.error("Failed to fetch image (likely CORS):", err);
+            setIsDownloadingImage(false);
+            // Don't alert, just let user know silently or fallback to upload
+          });
+      }
     }
   }, [initialData, exchangeRate]);
 
@@ -402,8 +426,8 @@ ${bulkTags ? bulkTags + '\n' : ''}${closingTag ? '⏰ ' + closingTag + '\n' : ''
         <div className="bg-gray-900 rounded-xl overflow-hidden shadow-lg relative min-h-[300px] lg:min-h-[400px] flex items-center justify-center border border-gray-700">
            {!previewUrl ? (
              <div className="text-gray-400 flex flex-col items-center p-8 text-center">
-                {isConverting ? (
-                  <div className="flex flex-col items-center animate-pulse"><RefreshCw size={64} className="mb-4 text-[#06C755] animate-spin" /><p className="text-lg font-bold text-gray-200">正在處理 HEIC 照片...</p></div>
+                {isConverting || isDownloadingImage ? (
+                  <div className="flex flex-col items-center animate-pulse"><RefreshCw size={64} className="mb-4 text-[#06C755] animate-spin" /><p className="text-lg font-bold text-gray-200">{isDownloadingImage ? '正在下載商品圖片...' : '正在處理 HEIC 照片...'}</p></div>
                 ) : (
                   <>
                     <UploadCloud size={48} className="mb-4 text-gray-500" />

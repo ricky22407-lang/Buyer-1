@@ -203,13 +203,16 @@ export const generateProductInfo = async (file: File) => {
 // 4. Trend Discovery (New Feature)
 export const searchTrendingItems = async (
   country: string, 
-  categories: string[]
+  categories: string[],
+  excludeNames: string[] = []
 ): Promise<TrendItem[]> => {
   const ai = getClient();
   const categoryStr = categories.join(", ");
+  const excludeStr = excludeNames.length > 0 ? `Excluding these existing items: [${excludeNames.join(', ')}]` : '';
   
   const prompt = `
     Find 6-8 specifically trending purchasing items (daigou/代購) from ${country} in categories: [${categoryStr}].
+    ${excludeStr}
     
     Target Data Sources:
     - Recent discussions on Threads, Dcard (Taiwan), Xiaohongshu (China), or PTT.
@@ -220,6 +223,7 @@ export const searchTrendingItems = async (
     - Currency: Estimate price in TWD.
     - Source Platform: Where is this discussed? (e.g. 小紅書, Threads).
     - Source URL: Find a real web link if possible.
+    - Image URL: Try to find a direct image link (ending in .jpg, .png) for the product from the search results if available.
     - Reason: Why is it hot? (e.g. "Lisa代言", "小紅書爆款", "換季必備").
     
     RETURN FORMAT:
@@ -233,6 +237,7 @@ export const searchTrendingItems = async (
         "estimatedPrice": number,
         "sourcePlatform": "string",
         "sourceUrl": "string",
+        "imageUrl": "string",
         "reason": "string"
       }
     ]

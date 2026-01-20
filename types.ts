@@ -61,6 +61,7 @@ export interface TrendItem {
   estimatedPrice: number;
   sourcePlatform: string; // e.g., 'Xiaohongshu', 'Threads'
   sourceUrl?: string;
+  imageUrl?: string; // New: Try to get image url
   reason: string; // Why is it trending?
 }
 

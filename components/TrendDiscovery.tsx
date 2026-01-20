@@ -1,21 +1,35 @@
 import React, { useState } from 'react';
 import { TrendItem } from '../types';
 import { searchTrendingItems } from '../services/geminiService';
-import { Search, Sparkles, ExternalLink, Plus, Wand2, Globe, Loader2, Tag } from 'lucide-react';
+import { Search, Sparkles, ExternalLink, Plus, Wand2, Globe, Loader2, Tag, ArrowDownCircle } from 'lucide-react';
 
 interface TrendDiscoveryProps {
   onAddProduct: (product: any) => void;
-  onGenerateCard: (data: { name: string, price: number, description: string }) => void;
+  onGenerateCard: (data: { name: string, price: number, description: string, imageUrl?: string }) => void;
+  // Lifted state props
+  items: TrendItem[];
+  setItems: React.Dispatch<React.SetStateAction<TrendItem[]>>;
+  selectedCountry: string;
+  setSelectedCountry: React.Dispatch<React.SetStateAction<string>>;
+  selectedCategories: string[];
+  setSelectedCategories: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 const COUNTRIES = ['日本', '韓國', '泰國', '中國', '美國', '歐洲'];
 const CATEGORIES = ['美妝保養', '零食伴手禮', '服飾包包', '藥妝保健', '居家小物', '母嬰用品', '小眾香氛'];
 
-const TrendDiscovery: React.FC<TrendDiscoveryProps> = ({ onAddProduct, onGenerateCard }) => {
-  const [selectedCountry, setSelectedCountry] = useState('日本');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(['美妝保養']);
-  const [items, setItems] = useState<TrendItem[]>([]);
+const TrendDiscovery: React.FC<TrendDiscoveryProps> = ({ 
+  onAddProduct, 
+  onGenerateCard,
+  items,
+  setItems,
+  selectedCountry,
+  setSelectedCountry,
+  selectedCategories,
+  setSelectedCategories
+}) => {
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories(prev => 
@@ -35,6 +49,22 @@ const TrendDiscovery: React.FC<TrendDiscoveryProps> = ({ onAddProduct, onGenerat
       alert('搜尋失敗，請稍後再試。');
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (selectedCategories.length === 0) return;
+    setIsLoadingMore(true);
+    try {
+      // Exclude existing names to avoid duplicates
+      const excludeNames = items.map(i => i.name);
+      const results = await searchTrendingItems(selectedCountry, selectedCategories, excludeNames);
+      setItems(prev => [...prev, ...results]);
+    } catch (e) {
+      console.error(e);
+      alert('載入更多失敗，請稍後再試。');
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -105,7 +135,7 @@ const TrendDiscovery: React.FC<TrendDiscoveryProps> = ({ onAddProduct, onGenerat
             ) : (
               <>
                 <Search className="mr-2" />
-                開始搜尋熱門商品
+                {items.length > 0 ? '重新搜尋 (清空結果)' : '開始搜尋熱門商品'}
               </>
             )}
           </button>
@@ -131,17 +161,30 @@ const TrendDiscovery: React.FC<TrendDiscoveryProps> = ({ onAddProduct, onGenerat
               <p className="text-2xl font-bold text-red-600 mb-2">${item.estimatedPrice}</p>
               <p className="text-sm text-gray-600 line-clamp-3 mb-4">{item.description}</p>
               
-              {item.sourceUrl && (
-                <a 
-                  href={item.sourceUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-xs text-indigo-600 flex items-center hover:underline mb-4"
-                >
-                  <ExternalLink size={12} className="mr-1" /> 
-                  查看原始來源 ({item.sourcePlatform})
-                </a>
-              )}
+              <div className="space-y-2">
+                {item.sourceUrl && (
+                  <a 
+                    href={item.sourceUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-indigo-600 flex items-center hover:underline"
+                  >
+                    <ExternalLink size={12} className="mr-1" /> 
+                    查看原始來源 ({item.sourcePlatform})
+                  </a>
+                )}
+                {item.imageUrl && (
+                   <a 
+                    href={item.imageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-gray-400 flex items-center hover:text-gray-600 truncate"
+                   >
+                     <ExternalLink size={12} className="mr-1" />
+                     圖片來源: {new URL(item.imageUrl).hostname}
+                   </a>
+                )}
+              </div>
             </div>
 
             <div className="p-4 bg-gray-50 border-t border-gray-100 flex space-x-2">
@@ -149,7 +192,8 @@ const TrendDiscovery: React.FC<TrendDiscoveryProps> = ({ onAddProduct, onGenerat
                 onClick={() => onGenerateCard({
                   name: item.name,
                   price: item.estimatedPrice,
-                  description: item.description
+                  description: item.description,
+                  imageUrl: item.imageUrl
                 })}
                 className="flex-1 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 flex items-center justify-center hover:bg-gray-100"
               >
@@ -180,6 +224,28 @@ const TrendDiscovery: React.FC<TrendDiscoveryProps> = ({ onAddProduct, onGenerat
         <div className="text-center py-12 text-gray-400">
            <Search size={48} className="mx-auto mb-2 opacity-20" />
            <p>選擇國家與分類後，點擊搜尋按鈕開始挖掘爆款。</p>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="mt-8 text-center">
+           <button
+             onClick={handleLoadMore}
+             disabled={isLoadingMore}
+             className="px-6 py-3 bg-white border border-gray-200 text-gray-600 rounded-full font-bold shadow-sm hover:bg-gray-50 flex items-center justify-center mx-auto"
+           >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={18} />
+                  搜尋更多爆款中...
+                </>
+              ) : (
+                <>
+                  <ArrowDownCircle className="mr-2" size={18} />
+                  往下滑，繼續挖掘更多商品
+                </>
+              )}
+           </button>
         </div>
       )}
     </div>

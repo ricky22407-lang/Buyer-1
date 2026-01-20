@@ -10,7 +10,7 @@ import { useOrderSystem } from './hooks/useOrderSystem';
 import { useScreenMonitor } from './hooks/useScreenMonitor';
 import { Sparkles, Cloud, CloudOff } from 'lucide-react';
 import { GROUP_OPTIONS } from './constants';
-import { Order, Product, AiInteraction } from './types';
+import { Order, Product, AiInteraction, TrendItem } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 const App: React.FC = () => {
@@ -23,7 +23,12 @@ const App: React.FC = () => {
   const [inputImages, setInputImages] = useState<File[]>([]);
 
   // --- Generator State Integration ---
-  const [initialGeneratorData, setInitialGeneratorData] = useState<{name: string, price: number, description: string} | null>(null);
+  const [initialGeneratorData, setInitialGeneratorData] = useState<{name: string, price: number, description: string, imageUrl?: string} | null>(null);
+
+  // --- Trend Discovery State (Lifted for Persistence) ---
+  const [trendItems, setTrendItems] = useState<TrendItem[]>([]);
+  const [trendCountry, setTrendCountry] = useState('日本');
+  const [trendCategories, setTrendCategories] = useState<string[]>(['美妝保養']);
 
   // --- Persistent Settings State (Local Only) ---
   const [productContext, setProductContext] = useState(() => localStorage.getItem('linePlusOne_productContext') || '');
@@ -103,7 +108,7 @@ const App: React.FC = () => {
     setAppMode('products');
   };
 
-  const handleTrendGenerateCard = (data: { name: string, price: number, description: string }) => {
+  const handleTrendGenerateCard = (data: { name: string, price: number, description: string, imageUrl?: string }) => {
     setInitialGeneratorData(data);
     setAppMode('generator');
   };
@@ -161,6 +166,12 @@ const App: React.FC = () => {
           <TrendDiscovery 
             onAddProduct={handleTrendAddProduct}
             onGenerateCard={handleTrendGenerateCard}
+            items={trendItems}
+            setItems={setTrendItems}
+            selectedCountry={trendCountry}
+            setSelectedCountry={setTrendCountry}
+            selectedCategories={trendCategories}
+            setSelectedCategories={setTrendCategories}
           />
         ) : appMode === 'products' ? (
            <ProductList 
