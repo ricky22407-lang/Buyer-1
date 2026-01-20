@@ -15,7 +15,15 @@ interface Sticker {
   type: 'price' | 'spec'; 
 }
 
-const ProductGenerator: React.FC = () => {
+interface ProductGeneratorProps {
+  initialData?: {
+    name: string;
+    price: number;
+    description: string;
+  } | null;
+}
+
+const ProductGenerator: React.FC<ProductGeneratorProps> = ({ initialData }) => {
   // Image & Canvas
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -47,6 +55,17 @@ const ProductGenerator: React.FC = () => {
   const [stickers, setStickers] = useState<Sticker[]>([]);
 
   // --- Effects ---
+
+  // Pre-fill data if provided (from Trend Discovery)
+  useEffect(() => {
+    if (initialData) {
+      setProductName(initialData.name);
+      setDescription(initialData.description);
+      setSellingPrice(initialData.price);
+      // Assume initial price is already the selling price estimate
+      setOriginalPrice(Math.round(initialData.price / exchangeRate));
+    }
+  }, [initialData, exchangeRate]);
 
   // 1. Cleanup Memory on Unmount or Image Change
   useEffect(() => {
@@ -131,8 +150,11 @@ const ProductGenerator: React.FC = () => {
       setStickers([]);
       setSpecs([]);
       setLoadedImage(null); 
-      setProductName('');
-      setDescription('');
+      // Only clear text if it wasn't pre-filled by initialData or user wants to re-analyze
+      if (!initialData) {
+        setProductName('');
+        setDescription('');
+      }
       
       e.target.value = '';
       setIsConverting(true);
@@ -157,16 +179,20 @@ const ProductGenerator: React.FC = () => {
         img.onload = () => { setLoadedImage(img); setIsConverting(false); };
         img.onerror = () => { setIsConverting(false); };
 
-        setIsAnalyzing(true);
-        try {
-          const result = await generateProductInfo(file);
-          if (result) {
-            setProductName(result.productName);
-            setDescription(result.description);
-            setOriginalPrice(result.detectedPrice || 0);
-          }
-        } finally {
-          setIsAnalyzing(false);
+        // Only analyze if we don't have initial data (or if user wants to override)
+        // For now, let's analyze only if fields are empty to help user.
+        if (!productName) {
+            setIsAnalyzing(true);
+            try {
+              const result = await generateProductInfo(file);
+              if (result) {
+                setProductName(result.productName);
+                setDescription(result.description);
+                setOriginalPrice(result.detectedPrice || 0);
+              }
+            } finally {
+              setIsAnalyzing(false);
+            }
         }
       } catch (err) { setIsConverting(false); }
     }
@@ -382,9 +408,10 @@ ${bulkTags ? bulkTags + '\n' : ''}${closingTag ? '⏰ ' + closingTag + '\n' : ''
                   <>
                     <UploadCloud size={48} className="mb-4 text-gray-500" />
                     <label className="mt-2 px-6 py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-full cursor-pointer transition-colors font-bold shadow-lg text-lg">
-                      選擇照片
+                      {initialData ? '上傳底圖以合成' : '選擇照片'}
                       <input type="file" onChange={handleImageUpload} className="hidden" accept="image/*, .heic" />
                     </label>
+                    {initialData && <p className="mt-4 text-sm text-yellow-400">已載入：{initialData.name}</p>}
                   </>
                 )}
              </div>

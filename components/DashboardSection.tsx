@@ -12,6 +12,8 @@ export type ViewMode = 'list' | 'buyer';
 interface DashboardSectionProps {
   orders: Order[];
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  updateOrder: (id: string, updates: Partial<Order>) => void;
+  deleteOrder: (id: string) => void;
   aiInteractions: AiInteraction[];
   clearAiInteractions: () => void;
   isAiAgentMode: boolean;
@@ -20,6 +22,8 @@ interface DashboardSectionProps {
 const DashboardSection: React.FC<DashboardSectionProps> = ({
   orders,
   setOrders,
+  updateOrder,
+  deleteOrder,
   aiInteractions,
   clearAiInteractions,
   isAiAgentMode
@@ -71,9 +75,17 @@ const DashboardSection: React.FC<DashboardSectionProps> = ({
       <StatsCard orders={orders} />
       
       {viewMode === 'list' ? (
-        <OrderTable orders={orders} setOrders={setOrders} />
+        <OrderTable 
+          orders={orders} 
+          onUpdateOrder={updateOrder}
+          onDeleteOrder={deleteOrder}
+        />
       ) : (
-        <BuyerSummary orders={orders} />
+        <BuyerSummary 
+          orders={orders} 
+          onUpdateOrder={updateOrder}
+          onDeleteOrder={deleteOrder}
+        />
       )}
     </div>
   );

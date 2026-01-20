@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wand2, Package, ShoppingBag } from 'lucide-react';
+import { Wand2, Package, ShoppingBag, Globe } from 'lucide-react';
 import { AppMode } from './Header';
 
 interface BottomNavProps {
@@ -11,6 +11,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ appMode, setAppMode }) => {
   const navItems = [
     { id: 'orders', label: '訂單管理', icon: ShoppingBag },
     { id: 'products', label: '商品/採購', icon: Package },
+    { id: 'trends', label: 'AI 選品', icon: Globe },
     { id: 'generator', label: '圖卡生成', icon: Wand2 },
   ];
 

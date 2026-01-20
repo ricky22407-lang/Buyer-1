@@ -1,3 +1,4 @@
+
 export enum OrderStatus {
   PENDING = '待處理',
   CONFIRMED = '已確認',
@@ -50,6 +51,17 @@ export interface Product {
   description?: string;
   purchasedQty?: number;
   purchaseNotes?: string;
+}
+
+// --- Trend Discovery Types ---
+export interface TrendItem {
+  id: string;
+  name: string;
+  description: string;
+  estimatedPrice: number;
+  sourcePlatform: string; // e.g., 'Xiaohongshu', 'Threads'
+  sourceUrl?: string;
+  reason: string; // Why is it trending?
 }
 
 export interface AnalysisResult {

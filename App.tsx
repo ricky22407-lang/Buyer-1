@@ -5,11 +5,13 @@ import InputSection, { InputMode } from './components/InputSection';
 import DashboardSection from './components/DashboardSection';
 import ProductGenerator from './components/ProductGenerator';
 import ProductList from './components/ProductList';
+import TrendDiscovery from './components/TrendDiscovery'; // Import
 import { useOrderSystem } from './hooks/useOrderSystem';
 import { useScreenMonitor } from './hooks/useScreenMonitor';
 import { Sparkles, Cloud, CloudOff } from 'lucide-react';
 import { GROUP_OPTIONS } from './constants';
 import { Order, Product, AiInteraction } from './types';
+import { v4 as uuidv4 } from 'uuid';
 
 const App: React.FC = () => {
   // --- Navigation State ---
@@ -19,6 +21,9 @@ const App: React.FC = () => {
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [inputText, setInputText] = useState('');
   const [inputImages, setInputImages] = useState<File[]>([]);
+
+  // --- Generator State Integration ---
+  const [initialGeneratorData, setInitialGeneratorData] = useState<{name: string, price: number, description: string} | null>(null);
 
   // --- Persistent Settings State (Local Only) ---
   const [productContext, setProductContext] = useState(() => localStorage.getItem('linePlusOne_productContext') || '');
@@ -50,7 +55,7 @@ const App: React.FC = () => {
 
   // --- Business Logic Hooks ---
   const { 
-    orders, setOrders, 
+    orders, setOrders, updateOrder, deleteOrder,
     products, updateProduct, addProduct, setProducts,
     aiInteractions, setAiInteractions, clearAiInteractions,
     isProcessing, error, analyzeContent, processAnalysisResult,
@@ -90,6 +95,17 @@ const App: React.FC = () => {
     setInputText('');
     setInputImages([]);
     clearAiInteractions();
+  };
+
+  const handleTrendAddProduct = (productData: any) => {
+    addProduct(productData);
+    alert('已加入商品採購列表！');
+    setAppMode('products');
+  };
+
+  const handleTrendGenerateCard = (data: { name: string, price: number, description: string }) => {
+    setInitialGeneratorData(data);
+    setAppMode('generator');
   };
 
   // --- Data Sync Logic ---
@@ -140,7 +156,12 @@ const App: React.FC = () => {
       <main className="flex-1 w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 mt-2 lg:mt-8 pb-24 lg:pb-8">
         
         {appMode === 'generator' ? (
-          <ProductGenerator />
+          <ProductGenerator initialData={initialGeneratorData} />
+        ) : appMode === 'trends' ? (
+          <TrendDiscovery 
+            onAddProduct={handleTrendAddProduct}
+            onGenerateCard={handleTrendGenerateCard}
+          />
         ) : appMode === 'products' ? (
            <ProductList 
              products={products} 
@@ -218,6 +239,8 @@ const App: React.FC = () => {
                 <DashboardSection 
                   orders={orders}
                   setOrders={setOrders}
+                  updateOrder={updateOrder}
+                  deleteOrder={deleteOrder}
                   aiInteractions={aiInteractions}
                   clearAiInteractions={clearAiInteractions}
                   isAiAgentMode={isAiAgentMode}

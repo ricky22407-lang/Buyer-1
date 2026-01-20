@@ -77,8 +77,10 @@ export const useOrderSystem = () => {
             }
             return [...prev, newOrder];
           });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = payload.old.id; // Correct way to get ID on DELETE
+          setOrders(prev => prev.filter(o => o.id !== deletedId));
         }
-        // Handle DELETE if needed
       })
       .subscribe();
 
@@ -120,16 +122,28 @@ export const useOrderSystem = () => {
     }
   }, [orders, products, isCloudConnected]);
 
+  // --- CRUD Operations that Handle Cloud Sync ---
 
-  // Helper to update state AND cloud
-  const syncOrderToCloud = async (newOrder: Order) => {
+  const updateOrder = async (id: string, updates: Partial<Order>) => {
+    const currentOrder = orders.find(o => o.id === id);
+    if (!currentOrder) return;
+    
+    const updatedOrder = { ...currentOrder, ...updates };
+
+    // Optimistic Update
+    setOrders(prev => prev.map(o => o.id === id ? updatedOrder : o));
+
     if (isCloudConnected) {
-      await DatabaseService.upsertOrders([newOrder]);
-    } else {
-      setOrders(prev => {
-         const exists = prev.find(o => o.id === newOrder.id);
-         return exists ? prev.map(o => o.id === newOrder.id ? newOrder : o) : [...prev, newOrder];
-      });
+      await DatabaseService.upsertOrders([updatedOrder]);
+    }
+  };
+
+  const deleteOrder = async (id: string) => {
+    // Optimistic Update
+    setOrders(prev => prev.filter(o => o.id !== id));
+
+    if (isCloudConnected) {
+      await DatabaseService.deleteOrder(id);
     }
   };
 
@@ -191,7 +205,7 @@ export const useOrderSystem = () => {
       }
     }
 
-    // 2. Process Products
+    // 2. Process Products (Existing logic...)
     if (newProducts.length > 0) {
       const processedProducts: Product[] = newProducts.map(p => ({
         ...p,
@@ -299,6 +313,8 @@ export const useOrderSystem = () => {
   return {
     orders,
     setOrders, 
+    updateOrder,
+    deleteOrder,
     products,
     updateProduct,
     addProduct,

@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react';
 import { Order, OrderStatus } from '../types';
-import { User, Copy, CheckCircle } from 'lucide-react';
+import { User, Copy, CheckCircle, Plus, Minus, Trash2 } from 'lucide-react';
 
 interface BuyerSummaryProps {
   orders: Order[];
+  onUpdateOrder: (id: string, updates: Partial<Order>) => void;
+  onDeleteOrder: (id: string) => void;
 }
 
 interface BuyerGroup {
@@ -13,7 +15,7 @@ interface BuyerGroup {
   totalQuantity: number;
 }
 
-const BuyerSummary: React.FC<BuyerSummaryProps> = ({ orders }) => {
+const BuyerSummary: React.FC<BuyerSummaryProps> = ({ orders, onUpdateOrder, onDeleteOrder }) => {
   const buyerGroups = useMemo(() => {
     const groups: { [key: string]: BuyerGroup } = {};
 
@@ -54,6 +56,18 @@ ${itemsList}
     alert(`已複製 @${group.name} 的結單訊息！`);
   };
 
+  const handleAdjustQuantity = (order: Order, delta: number) => {
+    const newQty = order.quantity + delta;
+    if (newQty < 0) return; // Prevent negative unless intended, but usually stop at 0
+    onUpdateOrder(order.id, { quantity: newQty });
+  };
+
+  const handleDeleteItem = (id: string) => {
+    if (window.confirm('確定要刪除這筆項目嗎？')) {
+      onDeleteOrder(id);
+    }
+  };
+
   if (buyerGroups.length === 0) {
     return (
       <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -84,13 +98,47 @@ ${itemsList}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto max-h-40 space-y-2 mb-4">
+          <div className="flex-1 overflow-y-auto max-h-60 space-y-2 mb-4 pr-1">
             {group.items.map((item) => (
-              <div key={item.id} className={`flex justify-between text-sm ${item.quantity < 0 ? 'text-red-400 line-through' : 'text-gray-700'}`}>
-                <span className="truncate w-2/3">{item.itemName}</span>
-                <span className="w-1/3 text-right">
-                  {item.quantity} x ${item.price}
-                </span>
+              <div key={item.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg group">
+                 {/* Item Info */}
+                 <div className="flex-1 min-w-0 mr-2">
+                    <div className={`text-sm truncate ${item.quantity <= 0 ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                      {item.itemName}
+                    </div>
+                    <div className="text-xs text-gray-400">${item.price} / 個</div>
+                 </div>
+
+                 {/* Interactive Controls */}
+                 <div className="flex items-center space-x-2">
+                    {/* Quantity Control */}
+                    <div className="flex items-center bg-white border border-gray-200 rounded-md h-7">
+                       <button 
+                         onClick={() => handleAdjustQuantity(item, -1)}
+                         className="px-2 text-gray-500 hover:bg-gray-100 h-full flex items-center rounded-l-md"
+                       >
+                         <Minus size={12} />
+                       </button>
+                       <span className={`text-xs font-bold w-6 text-center ${item.quantity === 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                         {item.quantity}
+                       </span>
+                       <button 
+                         onClick={() => handleAdjustQuantity(item, 1)}
+                         className="px-2 text-gray-500 hover:bg-gray-100 h-full flex items-center rounded-r-md"
+                       >
+                         <Plus size={12} />
+                       </button>
+                    </div>
+
+                    {/* Delete */}
+                    <button 
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition-colors"
+                      title="刪除"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                 </div>
               </div>
             ))}
           </div>

@@ -5,16 +5,17 @@ import { GROUP_OPTIONS } from '../constants';
 
 interface OrderTableProps {
   orders: Order[];
-  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  onUpdateOrder: (id: string, updates: Partial<Order>) => void;
+  onDeleteOrder: (id: string) => void;
 }
 
-const OrderTable: React.FC<OrderTableProps> = ({ orders, setOrders }) => {
+const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDeleteOrder }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Order>>({});
 
   const handleDelete = (id: string) => {
     if (window.confirm('確定要刪除這筆訂單嗎？')) {
-      setOrders(prev => prev.filter(o => o.id !== id));
+      onDeleteOrder(id);
     }
   };
 
@@ -25,7 +26,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, setOrders }) => {
 
   const saveEdit = () => {
     if (editingId && editForm) {
-      setOrders(prev => prev.map(o => (o.id === editingId ? { ...o, ...editForm } as Order : o)));
+      onUpdateOrder(editingId, editForm);
       setEditingId(null);
       setEditForm({});
     }
@@ -36,8 +37,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, setOrders }) => {
     setEditForm({});
   };
 
-  const updateStatus = (id: string, newStatus: OrderStatus) => {
-    setOrders(prev => prev.map(o => (o.id === id ? { ...o, status: newStatus } : o)));
+  const updateStatus = (id: string, currentStatus: OrderStatus) => {
+      const next = currentStatus === OrderStatus.PENDING ? OrderStatus.CONFIRMED 
+        : currentStatus === OrderStatus.CONFIRMED ? OrderStatus.PAID
+        : currentStatus === OrderStatus.PAID ? OrderStatus.SHIPPED
+        : OrderStatus.PENDING;
+      onUpdateOrder(id, { status: next });
   };
 
   const StatusBadge = ({ status }: { status: OrderStatus }) => {
@@ -190,13 +195,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, setOrders }) => {
                       </select>
                     ) : (
                       <button 
-                        onClick={() => {
-                          const next = order.status === OrderStatus.PENDING ? OrderStatus.CONFIRMED 
-                            : order.status === OrderStatus.CONFIRMED ? OrderStatus.PAID
-                            : order.status === OrderStatus.PAID ? OrderStatus.SHIPPED
-                            : OrderStatus.PENDING;
-                          updateStatus(order.id, next);
-                        }}
+                        onClick={() => updateStatus(order.id, order.status)}
                         className="focus:outline-none transform active:scale-95 transition-transform"
                       >
                         <StatusBadge status={order.status} />

@@ -44,6 +44,16 @@ export const DatabaseService = {
     if (error) console.error('Error saving orders:', error);
   },
 
+  async deleteOrder(id: string) {
+    if (!supabase) return;
+    const { error } = await supabase
+      .from('orders')
+      .delete()
+      .eq('id', id);
+
+    if (error) console.error('Error deleting order:', error);
+  },
+
   // --- Products ---
   async fetchProducts(): Promise<{ data: Product[], error: any }> {
     if (!supabase) return { data: [], error: 'No client' };

@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { RawOrder, AiInteraction, Product, AnalysisResult } from "../types";
+import { RawOrder, AiInteraction, Product, AnalysisResult, TrendItem } from "../types";
 import { GEMINI_MODEL } from "../constants";
 
 const getClient = () => {
@@ -197,5 +198,65 @@ export const generateProductInfo = async (file: File) => {
   } catch (error) {
     console.error("Product Analysis Error:", error);
     throw new Error("Failed to analyze product image.");
+  }
+};
+
+// 4. Trend Discovery (New Feature)
+export const searchTrendingItems = async (
+  country: string, 
+  categories: string[]
+): Promise<TrendItem[]> => {
+  const ai = getClient();
+  const categoryStr = categories.join(", ");
+  
+  const prompt = `
+    Find 6-8 specifically trending purchasing items (daigou/代購) from ${country} in categories: [${categoryStr}].
+    
+    Target Data Sources:
+    - Recent discussions on Threads, Dcard (Taiwan), Xiaohongshu (China), or PTT.
+    - Look for "MUST BUY", "Trending now", "Out of stock soon" items.
+    
+    Output Requirements:
+    - Language: Traditional Chinese (Taiwan).
+    - Currency: Estimate price in TWD.
+    - Source Platform: Where is this discussed? (e.g. 小紅書, Threads).
+    - Source URL: Find a real web link if possible.
+    - Reason: Why is it hot? (e.g. "Lisa代言", "小紅書爆款", "換季必備").
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash", // Use 2.5 Flash for robust search grounding
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING, description: "Product full name" },
+              description: { type: Type.STRING, description: "Sales pitch description" },
+              estimatedPrice: { type: Type.NUMBER, description: "Price in TWD" },
+              sourcePlatform: { type: Type.STRING },
+              sourceUrl: { type: Type.STRING },
+              reason: { type: Type.STRING, description: "Why is it trending?" }
+            },
+            required: ["name", "description", "estimatedPrice", "reason"],
+          }
+        },
+      },
+    });
+
+    if (response.text) {
+      const items = JSON.parse(response.text) as TrendItem[];
+      // Enrich with ID
+      return items.map(item => ({ ...item, id: crypto.randomUUID() }));
+    }
+    return [];
+  } catch (error) {
+    console.error("Trend Search Error:", error);
+    return [];
   }
 };

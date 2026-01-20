@@ -1,7 +1,7 @@
 import React from 'react';
-import { MessageSquare, Wand2, Package, ShoppingBag } from 'lucide-react';
+import { MessageSquare, Wand2, Package, ShoppingBag, Globe } from 'lucide-react';
 
-export type AppMode = 'orders' | 'products' | 'generator';
+export type AppMode = 'orders' | 'products' | 'generator' | 'trends';
 
 interface HeaderProps {
   appMode: AppMode;
@@ -32,6 +32,13 @@ const Header: React.FC<HeaderProps> = ({ appMode, setAppMode }) => {
           >
             <Package size={16} className="mr-1.5" />
             已上架/採購
+          </button>
+          <button 
+            onClick={() => setAppMode('trends')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center ${appMode === 'trends' ? 'bg-white text-[#06C755] shadow-sm' : 'bg-green-700 text-white hover:bg-green-600'}`}
+          >
+            <Globe size={16} className="mr-1.5" />
+            AI 選品
           </button>
           <button 
             onClick={() => setAppMode('generator')}
