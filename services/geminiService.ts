@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { RawOrder, AiInteraction, Product, AnalysisResult, TrendItem } from "../types";
 import { GEMINI_MODEL } from "../constants";
@@ -222,6 +221,21 @@ export const searchTrendingItems = async (
     - Source Platform: Where is this discussed? (e.g. 小紅書, Threads).
     - Source URL: Find a real web link if possible.
     - Reason: Why is it hot? (e.g. "Lisa代言", "小紅書爆款", "換季必備").
+    
+    RETURN FORMAT:
+    Return a strictly valid JSON array of objects.
+    Do not wrap in markdown code blocks.
+    Structure:
+    [
+      {
+        "name": "string",
+        "description": "string",
+        "estimatedPrice": number,
+        "sourcePlatform": "string",
+        "sourceUrl": "string",
+        "reason": "string"
+      }
+    ]
   `;
 
   try {
@@ -230,31 +244,26 @@ export const searchTrendingItems = async (
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING, description: "Product full name" },
-              description: { type: Type.STRING, description: "Sales pitch description" },
-              estimatedPrice: { type: Type.NUMBER, description: "Price in TWD" },
-              sourcePlatform: { type: Type.STRING },
-              sourceUrl: { type: Type.STRING },
-              reason: { type: Type.STRING, description: "Why is it trending?" }
-            },
-            required: ["name", "description", "estimatedPrice", "reason"],
-          }
-        },
+        // responseMimeType and responseSchema are REMOVED because they conflict with tools in this model version
       },
     });
 
-    if (response.text) {
-      const items = JSON.parse(response.text) as TrendItem[];
+    let text = response.text || "";
+    
+    // Attempt to extract JSON if wrapped in markdown
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      text = jsonMatch[1];
+    }
+
+    try {
+      const items = JSON.parse(text) as TrendItem[];
       // Enrich with ID
       return items.map(item => ({ ...item, id: crypto.randomUUID() }));
+    } catch (e) {
+      console.error("JSON Parse Error in Trend Search:", e, "Raw Text:", text);
+      return [];
     }
-    return [];
   } catch (error) {
     console.error("Trend Search Error:", error);
     return [];
