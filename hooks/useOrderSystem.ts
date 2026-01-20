@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Order, Product, AiInteraction, AnalysisResult, OrderStatus, RawOrder } from '../types';
 import { parseChatLogs } from '../services/geminiService';
@@ -11,6 +11,13 @@ export const useOrderSystem = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   
+  // Ref to track latest orders/products without triggering re-renders in callbacks
+  const ordersRef = useRef<Order[]>([]);
+  const productsRef = useRef<Product[]>([]);
+
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
+  useEffect(() => { productsRef.current = products; }, [products]);
+
   const [aiInteractions, setAiInteractions] = useState<AiInteraction[]>(() => {
     try {
       const saved = localStorage.getItem('linePlusOne_aiInteractions');
@@ -99,6 +106,9 @@ export const useOrderSystem = () => {
             }
             return [newProduct, ...prev]; // Newest first usually
           });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = payload.old.id;
+          setProducts(prev => prev.filter(p => p.id !== deletedId));
         }
       })
       .subscribe();
@@ -158,6 +168,15 @@ export const useOrderSystem = () => {
     }
   };
 
+  const deleteProduct = async (id: string) => {
+    // Optimistic Update
+    setProducts(prev => prev.filter(p => p.id !== id));
+    
+    if (isCloudConnected) {
+      await DatabaseService.deleteProduct(id);
+    }
+  };
+
   // Core logic to merge new analysis results
   const processAnalysisResult = useCallback(async (
     result: AnalysisResult, 
@@ -169,6 +188,10 @@ export const useOrderSystem = () => {
     const newInteractions = result.aiInteractions || [];
 
     // 1. Process Orders
+    // FIX: Use ordersRef.current to get the latest orders synchronously
+    // This avoids the issue where setOrders callback runs after the logic checks
+    const currentOrders = ordersRef.current;
+    
     if (rawOrders.length > 0) {
       const processedOrders: Order[] = rawOrders.map((raw: RawOrder) => ({
         id: uuidv4(),
@@ -182,18 +205,16 @@ export const useOrderSystem = () => {
       
       const uniqueOrdersToAdd: Order[] = [];
       
-      setOrders(currentOrders => {
-        processedOrders.forEach(newOrder => {
-            const isDuplicate = currentOrders.some(existing => {
-                const isSameUser = existing.buyerName === newOrder.buyerName;
-                const isSameItem = existing.itemName === newOrder.itemName;
-                const isSameGroup = existing.groupName === newOrder.groupName;
-                const isRecent = (Date.now() - existing.timestamp) < 1000 * 60 * 10; // 10 mins
-                return isSameUser && isSameItem && isSameGroup && isRecent;
-            });
-            if (!isDuplicate) uniqueOrdersToAdd.push(newOrder);
-        });
-        return currentOrders; 
+      processedOrders.forEach(newOrder => {
+          const isDuplicate = currentOrders.some(existing => {
+              const isSameUser = existing.buyerName === newOrder.buyerName;
+              const isSameItem = existing.itemName === newOrder.itemName;
+              const isSameGroup = existing.groupName === newOrder.groupName;
+              // Check dup if within 10 minutes to prevent spam
+              const isRecent = (Date.now() - existing.timestamp) < 1000 * 60 * 10; 
+              return isSameUser && isSameItem && isSameGroup && isRecent;
+          });
+          if (!isDuplicate) uniqueOrdersToAdd.push(newOrder);
       });
 
       if (uniqueOrdersToAdd.length > 0) {
@@ -205,7 +226,8 @@ export const useOrderSystem = () => {
       }
     }
 
-    // 2. Process Products (Existing logic...)
+    // 2. Process Products (Use productsRef for consistency)
+    const currentProducts = productsRef.current;
     if (newProducts.length > 0) {
       const processedProducts: Product[] = newProducts.map(p => ({
         ...p,
@@ -217,45 +239,45 @@ export const useOrderSystem = () => {
         bulkRules: p.bulkRules || []
       }));
 
-      setProducts(currentProducts => {
-          const productsToSync: Product[] = [];
-          
-          processedProducts.forEach(newP => {
-            const existingIdx = currentProducts.findIndex(ep => {
-                const n1 = ep.name.trim().toLowerCase();
-                const n2 = newP.name.trim().toLowerCase();
-                return (n1 === n2) || (n1.length > 3 && n2.length > 3 && (n1.includes(n2) || n2.includes(n1)));
-            });
+      const productsToSync: Product[] = [];
+      
+      processedProducts.forEach(newP => {
+        const existingIdx = currentProducts.findIndex(ep => {
+            const n1 = ep.name.trim().toLowerCase();
+            const n2 = newP.name.trim().toLowerCase();
+            return (n1 === n2) || (n1.length > 3 && n2.length > 3 && (n1.includes(n2) || n2.includes(n1)));
+        });
 
-            if (existingIdx > -1) {
-                const updated = {
-                    ...currentProducts[existingIdx],
-                    price: newP.price || currentProducts[existingIdx].price,
-                    type: newP.type || currentProducts[existingIdx].type,
-                    specs: newP.specs.length > currentProducts[existingIdx].specs!.length ? newP.specs : currentProducts[existingIdx].specs,
-                    description: newP.description || currentProducts[existingIdx].description
-                };
-                productsToSync.push(updated);
-            } else {
-                productsToSync.push(newP);
-            }
-          });
-
-          if (productsToSync.length > 0) {
-             if (isCloudConnected) {
-                 DatabaseService.upsertProducts(productsToSync);
-             } else {
-                 const newState = [...currentProducts];
-                 productsToSync.forEach(p => {
-                     const idx = newState.findIndex(ep => ep.id === p.id);
-                     if (idx > -1) newState[idx] = p;
-                     else newState.unshift(p);
-                 });
-                 return newState;
-             }
-          }
-          return currentProducts;
+        if (existingIdx > -1) {
+            const updated = {
+                ...currentProducts[existingIdx],
+                price: newP.price || currentProducts[existingIdx].price,
+                type: newP.type || currentProducts[existingIdx].type,
+                specs: newP.specs.length > currentProducts[existingIdx].specs!.length ? newP.specs : currentProducts[existingIdx].specs,
+                description: newP.description || currentProducts[existingIdx].description
+            };
+            productsToSync.push(updated);
+        } else {
+            productsToSync.push(newP);
+        }
       });
+
+      if (productsToSync.length > 0) {
+         if (isCloudConnected) {
+             DatabaseService.upsertProducts(productsToSync);
+         } else {
+             // Local update logic
+             setProducts(prev => {
+                const newState = [...prev];
+                productsToSync.forEach(p => {
+                    const idx = newState.findIndex(ep => ep.id === p.id);
+                    if (idx > -1) newState[idx] = p;
+                    else newState.unshift(p);
+                });
+                return newState;
+             });
+         }
+      }
     }
 
     // 3. Process AI Interactions (Local Only)
@@ -318,6 +340,7 @@ export const useOrderSystem = () => {
     products,
     updateProduct,
     addProduct,
+    deleteProduct, // Exported
     setProducts,
     aiInteractions,
     setAiInteractions,

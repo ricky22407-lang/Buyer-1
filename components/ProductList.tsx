@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { Product, Order, ProductType } from '../types';
-import { Tag, Clock, Package, ShoppingCart, CheckCircle, Edit3, Plus, X, Layers } from 'lucide-react';
+import { Tag, Clock, Package, ShoppingCart, CheckCircle, Edit3, Plus, X, Layers, Trash2, Edit } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
   orders: Order[];
   onUpdateProduct: (id: string, updates: Partial<Product>) => void;
   onAddProduct: (product: Omit<Product, 'id' | 'timestamp' | 'purchasedQty' | 'purchaseNotes'>) => void;
+  onDeleteProduct: (id: string) => void;
 }
 
-const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdateProduct, onAddProduct }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdateProduct, onAddProduct, onDeleteProduct }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -23,6 +26,31 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
   // Sort: Connection -> Preorder -> Spot
   const sortedProducts = [...products].sort((a, b) => b.timestamp - a.timestamp);
 
+  const openAddModal = () => {
+    setEditingProductId(null);
+    setFormData({ name: '', price: '', type: '連線', closingTime: '', description: '', specsStr: '' });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (product: Product) => {
+    setEditingProductId(product.id);
+    setFormData({
+      name: product.name,
+      price: String(product.price),
+      type: product.type,
+      closingTime: product.closingTime || '',
+      description: product.description || '',
+      specsStr: product.specs ? product.specs.join(', ') : ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    if (window.confirm(`確定要刪除商品「${name}」嗎？\n注意：這不會刪除已建立的訂單。`)) {
+      onDeleteProduct(id);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.price) return;
@@ -32,15 +60,28 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
       ? formData.specsStr.split(/[,，\n]/).map(s => s.trim()).filter(s => s.length > 0)
       : [];
 
-    onAddProduct({
-      name: formData.name,
-      price: Number(formData.price),
-      type: formData.type,
-      closingTime: formData.closingTime,
-      description: formData.description,
-      specs: specs,
-      bulkRules: [] // Default empty
-    });
+    if (editingProductId) {
+      // Edit Mode
+      onUpdateProduct(editingProductId, {
+        name: formData.name,
+        price: Number(formData.price),
+        type: formData.type,
+        closingTime: formData.closingTime,
+        description: formData.description,
+        specs: specs
+      });
+    } else {
+      // Add Mode
+      onAddProduct({
+        name: formData.name,
+        price: Number(formData.price),
+        type: formData.type,
+        closingTime: formData.closingTime,
+        description: formData.description,
+        specs: specs,
+        bulkRules: [] // Default empty
+      });
+    }
     
     // Reset and close
     setFormData({ name: '', price: '', type: '連線', closingTime: '', description: '', specsStr: '' });
@@ -56,7 +97,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
           商品採購清單
         </h2>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={openAddModal}
           className="flex items-center px-4 py-2 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-lg font-bold shadow-md transition-colors text-sm"
         >
            <Plus size={18} className="mr-1.5" /> 手動上架
@@ -97,12 +138,30 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
           const percent = totalOrdered > 0 ? Math.min((purchased / totalOrdered) * 100, 100) : 0;
 
           return (
-            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col">
+            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col group relative">
               <div className={`h-1.5 w-full ${
                 product.type === '連線' ? 'bg-red-500' : 
                 product.type === '預購' ? 'bg-indigo-500' : 'bg-green-500'
               }`} />
               
+              {/* Card Actions (Hover) */}
+              <div className="absolute top-3 right-3 flex space-x-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <button 
+                  onClick={() => openEditModal(product)}
+                  className="p-1.5 bg-white text-gray-500 hover:text-indigo-600 rounded-full shadow border border-gray-200"
+                  title="編輯商品"
+                >
+                  <Edit size={14} />
+                </button>
+                <button 
+                  onClick={() => handleDelete(product.id, product.name)}
+                  className="p-1.5 bg-white text-gray-500 hover:text-red-600 rounded-full shadow border border-gray-200"
+                  title="刪除商品"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+
               <div className="p-4 flex-1">
                 <div className="flex justify-between items-start mb-2">
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${
@@ -112,14 +171,14 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
                     {product.type}
                   </span>
                   {product.closingTime && (
-                    <span className="flex items-center text-xs text-orange-600 font-medium bg-orange-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+                    <span className="flex items-center text-xs text-orange-600 font-medium bg-orange-50 px-2 py-0.5 rounded-full whitespace-nowrap mr-8">
                       <Clock size={12} className="mr-1" />
                       {product.closingTime.split(' ')[0]}
                     </span>
                   )}
                 </div>
 
-                <h3 className="font-bold text-gray-800 text-lg mb-1 leading-tight">{product.name}</h3>
+                <h3 className="font-bold text-gray-800 text-lg mb-1 leading-tight pr-6">{product.name}</h3>
                 <p className="text-2xl font-bold text-red-600 mb-3">${product.price}</p>
                 
                 {/* Specs Display */}
@@ -206,13 +265,17 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
         })}
       </div>
 
-      {/* Add Product Modal */}
+      {/* Add/Edit Product Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
              <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <h3 className="font-bold text-gray-800 flex items-center">
-                   <Plus size={18} className="mr-2 text-[#06C755]" /> 新增商品
+                   {editingProductId ? (
+                     <><Edit size={18} className="mr-2 text-indigo-600" /> 編輯商品</>
+                   ) : (
+                     <><Plus size={18} className="mr-2 text-[#06C755]" /> 新增商品</>
+                   )}
                 </h3>
                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                    <X size={20} />
@@ -307,7 +370,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, orders, onUpdatePro
                       type="submit"
                       className="flex-1 py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-lg font-bold shadow-sm"
                    >
-                      確認新增
+                      {editingProductId ? '確認修改' : '確認新增'}
                    </button>
                 </div>
              </form>

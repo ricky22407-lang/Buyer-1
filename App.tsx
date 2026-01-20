@@ -61,7 +61,7 @@ const App: React.FC = () => {
   // --- Business Logic Hooks ---
   const { 
     orders, setOrders, updateOrder, deleteOrder,
-    products, updateProduct, addProduct, setProducts,
+    products, updateProduct, addProduct, deleteProduct, setProducts,
     aiInteractions, setAiInteractions, clearAiInteractions,
     isProcessing, error, analyzeContent, processAnalysisResult,
     isCloudConnected
@@ -179,6 +179,7 @@ const App: React.FC = () => {
              orders={orders} 
              onUpdateProduct={updateProduct}
              onAddProduct={addProduct}
+             onDeleteProduct={deleteProduct}
            />
         ) : (
           <>

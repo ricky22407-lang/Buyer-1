@@ -81,5 +81,15 @@ export const DatabaseService = {
       .upsert(rows, { onConflict: 'id' });
 
     if (error) console.error('Error saving products:', error);
+  },
+
+  async deleteProduct(id: string) {
+    if (!supabase) return;
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
+
+    if (error) console.error('Error deleting product:', error);
   }
 };
